@@ -8,3 +8,8 @@ API Endpoints
 -------------
 
 http://`shanghai`.baixing.com/`m37400`.json
+
+其中｀shanghai｀是城市。也可以使用｀www｀是全站。
+｀m37400｀是请求的资源。资源的格式有如下两种：
+- `id`
+- `id/connection`
