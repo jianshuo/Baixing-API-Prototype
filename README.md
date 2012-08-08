@@ -21,8 +21,7 @@ ID方式访问一个实体
 http://graph.baixing.com/217700056
 
 将返回id为217700056的广告的信息如下：
-```xml
-
+```json
 {
 
      "id": "23432432",
@@ -55,7 +54,7 @@ http://graph.baixing.com/217700056
 }
 ```
 
-ID/connection方式访问一个实体的属性或者连接
+ID/connection方式访问一个实体的连接
 -------------------------------------------
 
 http://graph.baixing.com/`m432432/listings`
@@ -111,3 +110,7 @@ http://graph.baixing.com/`m432432/listings`
      }
 }
 ```
+
+每一个实体都有一些连接。比如说，一个类目就有listings这个连接，可以用来找到它包含的所有的帖子。
+
+
