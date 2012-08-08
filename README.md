@@ -21,67 +21,38 @@ ID方式访问一个实体
 http://graph.baixing.com/217700056
 
 将返回id为217700056的广告的信息如下：
-```json
+```xml
 
 {
 
      "id": "23432432",
-
      "title": "A good bike to sell",
-
      "description": "A very good one. Come and take a look. It is cheap. Please contact me at xxxxxxxxxxx. My email address is xxxxxxxxxxxß",
-
      "价格": "200元",
-
      "category": { "id": "zixingche", "name": "自行车"}
-
      "area": {
-
           "id": "m2171",
-
           "name": "松南",
-
           "parent": {
-
                "id": "m4323",
-
                "name": "联洋"
-
           }
-
      }
-
      "createdTime": 1343222,
-
      "images": "4ff2a482cf1af725fbc53d763969e6d0.jpg ca286ee77bf4ea293455c30366d7db1a.jpg",
-
      "user": {
-
           "id": "u86527441",
-
           "name": "bebeawu"
-
      },
-
      "type": {
-
           "id": "m36239",
-
           "name": "钢琴"
-
      },
-
      "connections": {
-
           "categories": http://graph.baixing.com/23432432/categories",
-
           "myothers": http://graph.baixing.com/86527441/ads"
-
      }
-
 }
-
-
 ```
 
 ID/connection方式访问一个实体的属性或者连接
@@ -91,6 +62,7 @@ http://graph.baixing.com/`m432432/listings`
 
 表达的是`钢琴`这个类型的所有的帖子，返回的是一个数组
 
+```json
 {
     "data": [
           {
