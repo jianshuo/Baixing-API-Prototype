@@ -113,6 +113,14 @@ http://graph.baixing.com/`m432432/listings`
 
 每一个实体都有一些连接。比如说，一个类目就有listings这个连接，可以用来找到它包含的所有的帖子。
 
+Objects
+=======
+
+* Ad
+* User
+* Tag
+* Category
+
 城市信息
 ========
 
