@@ -1,13 +1,34 @@
 <?php
 namespace Graph;
 
-class AccuralAccout {	
+/**
+*     o-----------o-----------o-----------o-----------o-----------o-----------o-----------
+*
+*          o-----------o-----------o-----------ø----
+*
+*                                                   o------
+*                                                                      o-----------o-----------
+*
+* |___________|___________|___________|___________|___________|___________|___________
+*                                ^               ^
+*                              start            end
+*
+*  上图的o代表在那一个时刻付钱。ø表示那一个时间段的钱比其他时间段少，因为时间不够一个时间单位
+*  设计理念：
+*     1. 所有时间的开始点为闭区间，结束点为开区间
+*     2. 订单一旦付钱，则不允许做任何改动。改动用开新订单，和负订单方式完成
+*     3. 如果遇到小树需要进位，选最终对客户有利的方式
+*/
+
+
+class CompanyAccount {	
 	function occuredRevenue($start, $end) {
 		if($end > time()) // You cannot predict future whether they cancel service
 			throw new \Exception('Calculating future accural revenue may cause error');
 			
 		$s = new Searcher(new AndQuery(
-			new RangeQuery('startTime', null, $end + 1), // Select those in concerns
+			new Query('paid', 1),
+			new RangeQuery('startTime', null, $end), // Select those in concerns
 			new RangeQuery('endTime', $start - 1, null) // Make selection broader, hack for >=
 		);
 		
@@ -21,8 +42,9 @@ class AccuralAccout {
 	}
 }
 
-class Ding {
+class Order {
 	public $unitTime = 24 * 60 * 60; // Round revenue to 24 hours.
+	private $paid = false;
 
 	function occuredRevenue($time) {
 		$money = 0;
@@ -44,25 +66,142 @@ class Ding {
 			throw new Exception("Order completed or not started. You cannot change it");
 	
 		$nd = new Ding();
+		$nd->parentId = $this->id;
 		$nd->startTime = max($time, $this->startTime);
 		$nd->endTime = $this->endTime;
 		$nd->price = -1 * ($this->price - $this->occuredRevenue($occurTime));
 		$nd->save();
+	}
+	
+	function pay($money) {
+		if($this->paid)
+			throw new Exception("You paid twice for the same order");
+
+		if(time() > $this->startTime) { //如果错过了开始时间，自动推迟以免用户受损失
+			$this->endTime = time() + ($this->endTime - $this->startTime)
+			$this->startTime = time();
+		}
+
+		$this->price = $money;
+		
+		$this->paid = 1; //after paid, the order cannot be modified
+		$this->save();
+	}
+	
+	function place() {
+		$this->price = $this->dingPrice();
+		$this->save();
+	}
+}
+
+/**
+ *   PRE-MONEY:
+ *    realMoney = balance * ratio;
+ *    usableMoney = balance;
+ *
+ *   TRANSACTION:
+ *    realMoney = money;
+ *    usableMoney = credit;
+ *
+ *   POST-MONEY
+ *    realMoney = balance * ratio + money;
+ *    usableMoney = balance + credit + money
+ *    ratio = realMoney / usableMoney = (balance * ratio + money) / (balance + credit + money)
+ *
+ */
+
+class UserAccount {
+	private $balance;
+	private $ratio;
+	
+	function in($money, $credit) {
+		$this->ratio = round(($this->balance * $this->ratio + $money) / ($this->balance + $credit + $money), 4);
+		$this->balance += round($money + $credit, 2);
+		return $this->balance;
+	}
+	
+	function out($mondit) { //mondit = money + credit
+		$this->balance -= round($mondit, 2);
+		return $this->balance;
+	}
+	
+	function balance() {
+		return $this->balance;
+	}
+	
+	function ratio() {
+		return $this->ratio;
+	}
+}
+
+function chaoge_transaction() {
+	$args = func_get_args();
+	
+	chaoge_transaction_begin();
+	
+	try{
+		call_user_func(array(shift($args), shift($args)), $args);
+		chaoge_transaction_commit();
+	} catch ($e) {
+		chaoge_transaction_rollback();
+		throw $e;
+	}
 }
 
 
-/**
-*     o-----------o-----------o-----------o-----------o-----------o-----------o-----------
-*
-*          o-----------o-----------o-----------ø----
-*
-*                                                                      o-----------o-----------
-*
-* |___________|___________|___________|___________|___________|___________|___________
-*                                               ^
-*                                              time
-*
-*/
+class Purchase {
+	function partialCancel($orderId, $time) {
+		$o = graph($orderId);
+		$o->negativeOrder($time);
+		$ua = $o->get('user_account');
+		$ua->in($o->price, $o->price / $o->ratio * (1- $o->ratio));
+		
+		$o->save();
+		$ua->save();
+	}
+	
+	function renew($orderId, $days) {
+		if(time() > $this->endTime)
+			throw new Exception("Create a new order. Don't renew.");
+			
+		$o = graph($orderId);
+		
+		$nd = new Ding();
+		$nd->startTime = $o->endTime;
+		$nd->endTime = $o->startTime + $days;
+		$nd->save();
+	}
+	
+	function buy() {
+		
+	}
+	
+	function refund() {
+	
+	}
+}
 
+$d = new Ding();
+$d->startTime = time();
+$d->endTime = time() + 30 * 60 * 60;
+$d->placeOrder();
+
+//Change Category for $adId;
+$order = shift(graph($adId)->active_order());
+$order->partialCancel(time());
+$o = new Ding();
+$o->startTime = time();
+$o->endTime = time() + $days * 24 * 60 * 60;
+$o->place();
+
+//买10天送2天
+$order = new Order();
+$order->startTime = time();
+$order->endTime = time() + (10 + 2) * 24 * 60 * 60;
+$oder->price = 100;
+$order->place();
+
+//部分停止
+chaoge_transaction('Purchase', 'partialCancel', $orderId, time());
 
 ?>
