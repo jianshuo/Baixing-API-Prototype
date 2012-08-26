@@ -1,4 +1,4 @@
-ass AccuralRevenue {
+class AccuralRevenue {
 	public unitTime = 24 * 60 * 60; // Round revenue to 24 hours.
 	
 	function revenueOccured(start, end) {
