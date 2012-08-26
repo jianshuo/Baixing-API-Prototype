@@ -73,7 +73,7 @@ class Order {
 		$nd->save();
 	}
 	
-	function pay($money) {
+	function pay($realMoney) {
 		if($this->paid)
 			throw new Exception("You paid twice for the same order");
 
@@ -82,15 +82,53 @@ class Order {
 			$this->startTime = time();
 		}
 
-		$this->price = $money;
+		$this->paidPrice = $realMoney;
 		
 		$this->paid = 1; //after paid, the order cannot be modified
 		$this->save();
 	}
 	
 	function place() {
-		$this->price = $this->dingPrice();
+		$this->price = $this->price(new DingPricing());
 		$this->save();
+	}
+	
+	function price($algorithm) {
+		return $algorithm->price($this);
+	}
+}
+
+class DingPricing {
+	public $sensitivty = 0.5;
+	public $capacity = 8;
+	public $bottom = 3;
+	public $tolerance = 30 * 60 * 60;
+	
+	function price($order) {
+		$os = new Searcher(
+			new AndQuery(
+				new Query('target', $order->target),
+				new Query('paid', 1),	
+				new RangeQuery('price', 0, null),
+			),
+			array('order' => 'startTime DESC')
+		);
+		
+		if(count($os) == 0)
+			return $this->basePrice;
+		
+		$currentPrice = $os[0]->price;
+		if(count($os) > $this->capacity) {
+			foreach(array_slice($os, 0, floor($this->capacity * $this->sensitivity) as $o) {
+				if($o->price != $currentPrice)
+					break;
+			}
+			return $this->increasePrice($currentPrice);
+		}
+		
+		if(count($os) <= $this->bottom && $os[0]->startTime - time() > $this->tolerance) {
+			return $this->decreasePrice($currentPrice);
+		}
 	}
 }
 
@@ -154,7 +192,8 @@ class Purchase {
 		$o = graph($orderId);
 		$o->negativeOrder($time);
 		$ua = $o->get('user_account');
-		$ua->in($o->price, $o->price / $o->ratio * (1- $o->ratio));
+		$ratio = $o->paidPrice / $o->price;
+		$ua->in($o->paidPrice, $o->paidPrice / $ratio * (1- $ratio));
 		
 		$o->save();
 		$ua->save();
