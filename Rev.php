@@ -3,183 +3,136 @@
 namespace Graph;
 
 class CompanyAccount {
-	function occuredRevenue($start, $end) {
-		if($end > $time())
-			throw new Exception('Future is unknown. Refuse to tell you anything about future');
-			
+	function occuredRevenue($starTime, $endTime) {
+		$money = 0;
+		
+		if($endTime > time()) 
+			throw new Exception("Refuse to tell you future, because that may be inaccurate");
+		
 		$s = new Searcher(
 			new AndQuery(
+				new Query('type', 'Order'),
 				new Query('paid', 1),
-				new RangeQuery('startTime', null, $end),
-				new RangeQuery('endTime', $start - 1, null),
-		));
-		
-		$money = 0;
+				new RangeQuery('startTime', null, $endTime),
+				new RangeQuery('endTime', $startTime - 1, null)
+			)
+		);
 		
 		foreach($s as $order)
-			$money += ($order->occuredRevenue($end) - $order->occuredRevenue($start));
+			$money += ($order->occuredRevenue($endTime) - $order->occuredRevenue($startTime));
 			
 		return $money;
-	}
-}
-
-class Order {
-	public $unitTime = 24 * 60 * 60;
-	private $paid = false;
-	
-	function occuredRevenue($time) {
-		$money = 0;
-		$unitPrice = round($this->price / ($this->endTime - $this->startTime) * $this->unitTime, 2);
-		
-		for($i = 0; $occuredTime = $this->startTime + $this->unitTime * $i, $occuredTime <= min($time, $this->endTime); $i ++) {
-			if($this->endTime - $occuredTime < $this->unitTime)
-				$money += ($this->price - $i * $unitPrice);
-			else
-				$meony += $unitPrice;
-		}
-		
-		return $money;
-	}
-	
-	function place() {
-		if($this->areaId == null || 
-			$this->categoryId == null || 
-			$this->startTime == null || 
-			$this->endTime == null || 
-			$this->type == null)
-			throw new Exception('Data not complete');
-			
-		$this->price = $this->getPrice();
-		
-		$ad = graph($this->adId);
-		
-		foreach($ad->area->path() as $a) {
-			$this->areas[] = $a->id;
-			if($a->id == $this->area)
-				break;
-		}
-		
-		foreach($ad->category->path() as $c) {
-			$this->categories[] = $c->id;
-			if($tihs->id == $this->category)
-				break;
-		}
-			
-		$this->save();
-	}
-	
-	function pay($realMoney) {
-		if($this->paid)
-			throw new Exception('Cannot pay paid order');
-		
-		if(time() > $this->startTime) {
-			$this->endTime = time() + ($this->endTime - $this->startTime);
-			$this->startTime = time();
-		}
-		
-		$this->price = $realMoney;
-		$this->paid = 1;
-		$this->save();
-	}
-		
-	function partialCancel($time) {
-		if($time >= $this->endTime)
-			throw new Exception('Connot cancel, or partial cancel completed order');
-
-		$o = clone $this;
-		$o->startTime = max($time, $this->startTime);
-		$o->endTime = $this->endTime;
-		$o->price = $this->occuredRevenue($time) - $this->price;
-		$o->parentId = $this->id;
-		$o->save();
-	}
-}
-
-class DingOrder extends Order {
-	function __construct() {
-		$this->type = 'ding';
-	}
-	
-	function getPrice() {
-		$dp = new DingPrice();
-		return $dp->price($this);
-	}
-}
-
-class PortOrder extends Order {
-	function __construct() {
-		$this->type = 'port';
-	}
-	
-	function getPrice() {
-		return Config::get('Price', $this->category, $this->area);
 	}
 }
 
 class UserAccount {
-	public $balance;
-	public $ratio;
+	public $balance; // money + credit;
+	public $ratio; // money / balance;
 	
-	function in($money, $credit) {
-		$this->ratio = ($this->balance * $this->ratio + $money) / ($this->balance + $money + $credit)
-		return $this->balance += ($money + $credit)
+	function in($money, $credit){
+		$this->ratio = ($this->balance * $this->ratio + $money) / ($this->balance + $money + $credit);
+		$this->balance += $money + $credit;
+		$this->save();
 	}
 	
-	function out($mondit) {
-		return $this->balance -= $mondit;
-	}
-	
-	function partialCancel($orderId, $time) {
-		$o = graph($orderId);
-		$o->particalCancel($time);
-		
-		$ratio = $o->price / $o->listPrice;
-		$refund = $o->price - $o->occuredRevenue($time);
-		
-		$this->in($refund, $refund / $ratio * (1-$ratio));
+	function out($mondit) { //mondit = money + credit
+		$this->balance -= $mondit;
 		$this->save();
 	}
 	
 	function pay($order) {
-		$order->pay($listPrice * $this->ratio);
-		$this->out($listPrice);
-		$this->save();
+		$order->pay($order->listPrice * $this->ratio);
+		$this->out($order->listPrice);
+	}
+	
+	function partialCancel($order, $time) {
+		$order->particalCancel($time);
+		
+		$refund = $order->price - $order->occuredRevenue();
+		$ratio = $order->price / $order->listPrice;
+		$this->in($refund, $refund / $ratio * (1 - $ratio));
 	}
 }
 
-
-class DingPrice {
-	public $capacity = 8;
-	public $sensitivity = 0.5;
+class Order {
+	public $unitTime = 24 * 60 * 60; // 1 day
+	public $paid = false;
 	
+	function occuredRevenue($time) {
+		$money = 0;
+		$unitPrice = round(($this->price) / ($this->endTime - $this->startTime) * $this->unitTime, 2); 
+		for($i = 0; $occuredTime = $this->startTime + $this->unitTime * $i, $occuredTime < min($time, $endTime); $i++)
+			if($this->endTime - $this->occuredTime <= $this->unitTime)
+				$money += ($this->price - $unitPrice * $i);
+			else
+				$money += $unitPrice;
+		return $money;		
+	}
+	
+	function place() {
+		$pa = new BiddingPrice();
+		$this->listPrice = $pa->price($order);
+		$this->save();
+	}
+	
+	function partialCancel($time) {
+		if($time >= $this->endTime)
+			throw new Exception('Cannot cancel completed order');
+		
+		$neg = clone $this;
+		$neg->startTime = max($this->startTime, $time);
+		$neg->price = $this->occuredRevenue($time) - $this->price;
+		$neg->save();
+	}
+	
+	function attributes() {
+		$ad = graph($this->adId);
+		
+		$categories = array():
+		$areas = array();
+		
+		foreach(array_reverse($ad->category->path()) as $c) {
+			$categories[] = $c->id;
+			if($c->id == $this->category->id)
+				return;
+		}
+		
+		foreach(array_reverse($ad->area->path()) as $a) {
+			$areas[] = $a->id;
+			if($a->id == $this->area->id)
+				return;
+		}
+		
+		return array_merge(parent::attributes(), compact('categoreis', 'areas'));
+	}
+}
+
+class DingPrice extends BiddingPrice {
+	public $capacity = 12;
+	public $sensitivity = 0.5;
 	public $bottom = 3;
-	public $tolerance = 10;
-	
-	public $basePrice = 10;
-	
+	public $tolerance = 30; // day
+	public $basePrice = 10; // RMB
 }
 
-class PortPrice {
-	public $capacity = 10;
+class RefreshPrice extends BiddingPrice {
+	public $capacity = 12;
 	public $sensitivity = 0.5;
-	
-	public $bottom = 
-
+	public $bottom = 3;
+	public $tolerance = 30; // day
+	public $basePrice = 10; // RMB
 }
 
-class RefreshPrice {
-
-}
-
-
-class Bidding {
+class BiddingPrice {
 	function price($order) {
 		$s = new Searcher(
 			new AndQuery(
+				new Query('type', 'Order'),
 				new Query('paid', 1),
-				new Query('area', $this->area),
-				new Query('category', $this->category),
-			)
+				new Query('area', $order->area),
+				new Query('category', $order->category)
+			),
+			array('order' => 'startTime DESC')
 		);
 		
 		if(count($s) == 0)
@@ -187,53 +140,113 @@ class Bidding {
 		
 		$currentPrice = $s[0]->listPrice;
 		
-		if(count($s) <= $this->bottom && ($time - $s[0]->startTime) > $this->tolerance)
-			return $this->descrease($currentPrice);
-			
-		if(count($s) > $this->capcity) {
-			foreach(array_slice($s, 0, floor($this->capacity * $this->sensivitity))as $a)
-				if($a->listPrice != $currentPrice)
-					break;
-				return $this->increase($currentPrice);
+		if(count($s) > $this->capacity) {
+			foreach(array_slice($s, 0 floor($this->sensitivity * $this->capacity) as $o)
+				if($o->listPrice != $currentPrice)
+					return $currentPrice;
+			return $this->increase($currentPrice);
 		}
 		
-		return $currentPrice;		
+		if(count($s) <= $this->bottom &&
+			time() - $s[0]->startTime > $this->tolerance)
+			return $this->decrease($currentPrice);
+			
+		return $currentPrice;
 	}
 	
 	function increase($price) {
-		return $price + $this->basePrice;
+		return $price + 10;
 	}
 	
 	function decrease($price) {
-		return $price - $this->basePrice;
+		return $price - 10;
 	}
 }
 
-class DingAd {
+class DingAds {
 	function ads() {
 		$v = new Visitor();
-		
 		$s = new Searcher(
 			new AndQuery(
-				new Query('paid' , 1),
-				new RangeQuery('startTime', null, time() - 1),
+				new Query('type', 'Order'),
+				new Query('paid', 1),
+				new RangQuery('startTime', null, time() + 1),
 				new RangeQuery('endTime', time(), null),
 				new Query('categories', $v->category),
 				new InQuery('areas', $v->area->path())
+				)
 			)
 		);
 		
-		foreach($s as $ad) {
-			if($ad->price >= 0)
-				$dingAds[] = $ad->id;
+		$dingAds = array();
+		$negAds = array();
+		
+		foreach($s as $o)
+			if($o->price >= 0)
+				$dingAds[] = $o->id;
 			else
-				$cancelledAds[] = $ad->id;
-		
-		}
-		
-		return array_diff($dingAds, $cancelledAds);
+				$negAds[] = $o->id;
+				
+		return array_diff($dingAds, $negAds);
 	}
 }
 
 
-?>
+/**
+ * 1. AccuralBasedAccouting DONE
+ * 2. Ding (Category, Filter, City, Province, China) DONE
+ * 3. Place order, pay, refund, partialCancel DONE
+ * 4. Pricing (Ding bidding based pricing, Refresh bidding, list bidding) DONE
+ * 5. User Account, real money, fake money DONE
+ * 6. Ding display DONE
+ * 7) Refresh 5 RMB
+ * 8) listing fee 10 RMB
+ * 9) Sales tools
+ * 10) Automatic invoice
+ * 11) Port service
+ *
+ *    o-----o-----o-----o-----ø--
+ *                  ^ time
+ *        o-----o-----o-----o-----o----
+ *  
+ *											o-----o-----
+ *
+ *  |------|------|------|------|------|------|------|
+ *        ^ startTime                ^ endTime
+ *
+ *  Order
+ *  =====
+ *  orderId
+ *  starTime
+ *  endTime
+ *  listPrice
+ *  price
+ *  paid
+ *  area
+ *  category
+ *  adId
+ *
+ *  1. Order never change after paid.
+ *  2. Range [startTime, endTime)
+ *  3. price, money refer to real money,
+ *  4. listPrice, $credit refer to fake money.
+ */
+ 
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
